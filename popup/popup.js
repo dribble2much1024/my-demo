@@ -48,20 +48,29 @@ function showToast(msg, duration = 2000) {
 // Step 2: loadSettings — 从 Service Worker 加载并回填配置表单
 // ============================================================
 async function loadSettings() {
-  const response = await chrome.runtime.sendMessage({ action: 'getSettings' });
-  const s = response.settings;
-
-  urlPatternsInput.value = (s.urlPatterns || []).join('\n');
-  headerFieldsInput.value = (s.headerFields || []).join(', ');
+  try {
+    const response = await chrome.runtime.sendMessage({ action: 'getSettings' });
+    const s = response.settings;
+    urlPatternsInput.value = (s.urlPatterns || []).join('\n');
+    headerFieldsInput.value = (s.headerFields || []).join(', ');
+  } catch (err) {
+    // Service Worker 未就绪时静默使用默认空值
+    console.warn('Failed to load settings:', err);
+  }
 }
 
 // ============================================================
 // Step 3: loadCaptures — 加载捕获记录并渲染列表
 // ============================================================
 async function loadCaptures() {
-  const response = await chrome.runtime.sendMessage({ action: 'getCaptures' });
-  const captures = response.captures || [];
-  renderCaptures(captures);
+  try {
+    const response = await chrome.runtime.sendMessage({ action: 'getCaptures' });
+    const captures = response.captures || [];
+    renderCaptures(captures);
+  } catch (err) {
+    console.warn('Failed to load captures:', err);
+    renderCaptures([]);
+  }
 }
 
 function renderCaptures(captures) {
@@ -181,28 +190,36 @@ copyAllBtn.addEventListener('click', async () => {
 // Step 7: "清空"与"保存配置"事件绑定
 // ============================================================
 clearBtn.addEventListener('click', async () => {
-  await chrome.runtime.sendMessage({ action: 'clearCaptures' });
-  await loadCaptures();
-  showToast('已清空');
+  try {
+    await chrome.runtime.sendMessage({ action: 'clearCaptures' });
+    await loadCaptures();
+    showToast('已清空');
+  } catch (err) {
+    showToast('清空失败');
+  }
 });
 
 saveBtn.addEventListener('click', async () => {
-  const urlPatterns = urlPatternsInput.value
-    .split('\n')
-    .map(s => s.trim())
-    .filter(s => s.length > 0);
+  try {
+    const urlPatterns = urlPatternsInput.value
+      .split('\n')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
 
-  const headerFields = headerFieldsInput.value
-    .split(',')
-    .map(s => s.trim())
-    .filter(s => s.length > 0);
+    const headerFields = headerFieldsInput.value
+      .split(',')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
 
-  await chrome.runtime.sendMessage({
-    action: 'saveSettings',
-    settings: { urlPatterns, headerFields }
-  });
+    await chrome.runtime.sendMessage({
+      action: 'saveSettings',
+      settings: { urlPatterns, headerFields }
+    });
 
-  showToast('配置已保存');
+    showToast('配置已保存');
+  } catch (err) {
+    showToast('保存失败');
+  }
 });
 
 settingsToggle.addEventListener('click', () => {
