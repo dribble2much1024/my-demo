@@ -50,6 +50,7 @@ let cachedSettings = {
   bufferSize: 50
 };
 const dedupMap = new Map(); // key → timestamp
+let writeQueue = Promise.resolve(); // 串行化 storage 写入以防止竞态条件
 
 async function loadSettings() {
   const data = await chrome.storage.local.get('settings');
@@ -72,17 +73,22 @@ async function pushCapture(capture) {
   }
   dedupMap.set(key, now);
 
-  const data = await chrome.storage.local.get('captures');
-  let captures = data.captures || [];
+  // 串行化写入，避免并发请求导致的竞态条件
+  writeQueue = writeQueue.then(async () => {
+    const data = await chrome.storage.local.get('captures');
+    let captures = data.captures || [];
 
-  captures.push(capture);
+    captures.push(capture);
 
-  // 环形缓冲：只保留最近 bufferSize 条
-  if (captures.length > cachedSettings.bufferSize) {
-    captures = captures.slice(captures.length - cachedSettings.bufferSize);
-  }
+    // 环形缓冲：只保留最近 bufferSize 条
+    if (captures.length > cachedSettings.bufferSize) {
+      captures = captures.slice(captures.length - cachedSettings.bufferSize);
+    }
 
-  await chrome.storage.local.set({ captures });
+    await chrome.storage.local.set({ captures });
+  });
+
+  return writeQueue;
 }
 
 function onBeforeSendHeaders(details) {
@@ -140,6 +146,6 @@ loadSettings().then(() => {
   chrome.webRequest.onBeforeSendHeaders.addListener(
     onBeforeSendHeaders,
     { urls: ['<all_urls>'] },
-    ['requestHeaders']
+    ['requestHeaders', 'extraHeaders']
   );
 });
