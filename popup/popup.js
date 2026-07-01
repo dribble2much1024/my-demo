@@ -164,21 +164,21 @@ async function copyCapture(capture) {
 // Step 6: "复制全部" — 合并所有捕获记录
 // ============================================================
 copyAllBtn.addEventListener('click', async () => {
-  const response = await chrome.runtime.sendMessage({ action: 'getCaptures' });
-  const captures = response.captures || [];
-
-  if (captures.length === 0) return;
-
-  const allLines = captures.map(c => {
-    const headerLines = Object.entries(c.headers).map(
-      ([name, value]) => `${name}: ${value}`
-    );
-    return `# ${c.method} ${c.url}\n${headerLines.join('\n')}`;
-  });
-
-  const text = allLines.join('\n\n');
-
   try {
+    const response = await chrome.runtime.sendMessage({ action: 'getCaptures' });
+    const captures = response.captures || [];
+
+    if (captures.length === 0) return;
+
+    const allLines = captures.map(c => {
+      const headerLines = Object.entries(c.headers).map(
+        ([name, value]) => `${name}: ${value}`
+      );
+      return `# ${c.method} ${c.url}\n${headerLines.join('\n')}`;
+    });
+
+    const text = allLines.join('\n\n');
+
     await navigator.clipboard.writeText(text);
     showToast(`已复制 ${captures.length} 条记录`);
   } catch {

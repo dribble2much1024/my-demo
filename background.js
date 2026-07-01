@@ -43,6 +43,15 @@ function dedupKey(url, headers) {
   return url + '|' + JSON.stringify(headers);
 }
 
+/** 清理 dedupMap 中超过 5 秒的旧条目，防止 Map 无限增长 */
+function pruneDedupMap(now) {
+  for (const [key, timestamp] of dedupMap) {
+    if (now - timestamp > 5000) {
+      dedupMap.delete(key);
+    }
+  }
+}
+
 // 内存缓存 — Service Worker 生命周期内有效
 let cachedSettings = {
   urlPatterns: [],
@@ -51,6 +60,14 @@ let cachedSettings = {
 };
 const dedupMap = new Map(); // key → timestamp
 let writeQueue = Promise.resolve(); // 串行化 storage 写入以防止竞态条件
+
+/** 缓存的已编译正则，避免每次请求都重新编译 glob → RegExp */
+let compiledPatterns = [];
+
+/** 将 URL 匹配模式编译为正则，settings 变更时调用 */
+function compilePatterns(patterns) {
+  compiledPatterns = patterns.map(p => globToRegex(p));
+}
 
 async function loadSettings() {
   const data = await chrome.storage.local.get('settings');
@@ -67,6 +84,8 @@ async function loadSettings() {
 async function pushCapture(capture) {
   const key = dedupKey(capture.url, capture.headers);
   const now = Date.now();
+
+  pruneDedupMap(now);
 
   if (dedupMap.has(key) && (now - dedupMap.get(key)) < 5000) {
     return; // 5 秒内重复，跳过
@@ -86,6 +105,8 @@ async function pushCapture(capture) {
     }
 
     await chrome.storage.local.set({ captures });
+  }).catch(err => {
+    console.error('pushCapture: storage write failed', err);
   });
 
   return writeQueue;
@@ -96,7 +117,7 @@ function onBeforeSendHeaders(details) {
   if (!cachedSettings.urlPatterns || cachedSettings.urlPatterns.length === 0) return;
 
   // URL 匹配
-  const matched = cachedSettings.urlPatterns.some(p => globToRegex(p).test(details.url));
+  const matched = compiledPatterns.some(re => re.test(details.url));
   if (!matched) return;
 
   // 过滤请求头
@@ -115,7 +136,7 @@ function onBeforeSendHeaders(details) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.action) {
     case 'getCaptures':
-      chrome.storage.local.get('captures').then(data => {
+      writeQueue.then(() => chrome.storage.local.get('captures')).then(data => {
         sendResponse({ captures: data.captures || [] });
       }).catch(() => {
         sendResponse({ captures: [] });
@@ -123,9 +144,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true; // 保持通道开启以异步响应
 
     case 'clearCaptures':
-      chrome.storage.local.set({ captures: [] }).then(() => {
+      writeQueue = writeQueue.then(() => chrome.storage.local.set({ captures: [] })).then(() => {
         dedupMap.clear();
         sendResponse({ success: true });
+      }).catch(err => {
+        sendResponse({ success: false, error: err.message });
       });
       return true;
 
@@ -135,14 +158,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case 'saveSettings':
       cachedSettings = { ...cachedSettings, ...message.settings };
+      compilePatterns(cachedSettings.urlPatterns);
       chrome.storage.local.set({ settings: cachedSettings }).then(() => {
         sendResponse({ success: true });
+      }).catch(err => {
+        sendResponse({ success: false, error: err.message });
       });
       return true;
   }
 });
 
 loadSettings().then(() => {
+  compilePatterns(cachedSettings.urlPatterns);
   chrome.webRequest.onBeforeSendHeaders.addListener(
     onBeforeSendHeaders,
     { urls: ['<all_urls>'] },
