@@ -3,7 +3,7 @@
   "name": "Header Capture",
   "version": "1.0.0",
   "description": "捕获 API 请求头，一键复制到 Apifox",
-  "permissions": ["storage", "webRequest"],
+  "permissions": ["storage", "webRequest", "declarativeNetRequest"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
