@@ -25,6 +25,15 @@ const headerFieldsInput = document.getElementById('header-fields-input');
 const saveBtn = document.getElementById('save-btn');
 const toast = document.getElementById('toast');
 
+// Inject Tab DOM 引用
+const tabCapture = document.getElementById('tab-capture');
+const tabInject = document.getElementById('tab-inject');
+const panelCapture = document.getElementById('panel-capture');
+const panelInject = document.getElementById('panel-inject');
+const injectRulesList = document.getElementById('inject-rules-list');
+const addRuleBtn = document.getElementById('add-rule-btn');
+const injectSaveBtn = document.getElementById('inject-save-btn');
+
 document.addEventListener('DOMContentLoaded', init);
 
 // ============================================================
@@ -34,6 +43,200 @@ async function init() {
   await loadSettings();
   await loadCaptures();
 }
+
+// ============================================================
+// Inject 状态管理
+// ============================================================
+let injectRules = [];
+
+/** 从 storage 加载注入规则到本地编辑状态 */
+async function loadInjectRules() {
+  try {
+    const response = await chrome.runtime.sendMessage({ action: 'getSettings' });
+    injectRules = (response.settings.injectRules || []).map(r => ({
+      id: r.id,
+      pattern: r.pattern,
+      headers: r.headers.map(h => ({ name: h.name, value: h.value }))
+    }));
+    renderInjectRules();
+  } catch (err) {
+    injectRules = [];
+    renderInjectRules();
+  }
+}
+
+// ============================================================
+// Inject 规则渲染
+// ============================================================
+function renderInjectRules() {
+  injectRulesList.innerHTML = '';
+
+  if (injectRules.length === 0) {
+    injectRulesList.innerHTML = '<div class="empty-state"><p>暂无注入规则</p><p class="hint">点击下方按钮添加</p></div>';
+    return;
+  }
+
+  injectRules.forEach((rule, ri) => {
+    const card = createInjectRuleCard(rule, ri);
+    injectRulesList.appendChild(card);
+  });
+}
+
+function createInjectRuleCard(rule, ri) {
+  const card = document.createElement('div');
+  card.className = 'inject-rule-card';
+
+  card.innerHTML = `
+    <div class="inject-rule-header">
+      <span class="inject-rule-label">规则 #${ri + 1}</span>
+      <button class="btn-icon" data-action="delete-rule" data-ri="${ri}" title="删除规则">&#x2715;</button>
+    </div>
+    <input class="pattern-input"
+           type="text"
+           placeholder="*.example.com/api/*"
+           value="${escapeHtml(rule.pattern)}"
+           data-ri="${ri}"
+           data-field="pattern">
+    <div class="inject-headers-label">Headers</div>
+    <div class="inject-headers-rows" data-ri="${ri}">
+      ${rule.headers.map((h, hi) => `
+        <div class="inject-header-row">
+          <input class="key-input"
+                 type="text"
+                 placeholder="Header-Name"
+                 value="${escapeHtml(h.name)}"
+                 data-ri="${ri}"
+                 data-hi="${hi}"
+                 data-field="name">
+          <input class="val-input"
+                 type="text"
+                 placeholder="Value"
+                 value="${escapeHtml(h.value)}"
+                 data-ri="${ri}"
+                 data-hi="${hi}"
+                 data-field="value">
+          <button class="btn-icon" data-action="delete-header" data-ri="${ri}" data-hi="${hi}" title="删除">&#x2715;</button>
+        </div>
+      `).join('')}
+    </div>
+    <button class="btn-add-header" data-action="add-header" data-ri="${ri}">+ 添加 Header</button>
+  `;
+
+  return card;
+}
+
+// ============================================================
+// Inject 事件代理
+// ============================================================
+injectRulesList.addEventListener('click', (e) => {
+  const target = e.target;
+
+  // 删除规则
+  if (target.dataset.action === 'delete-rule') {
+    const ri = parseInt(target.dataset.ri);
+    injectRules.splice(ri, 1);
+    renderInjectRules();
+    return;
+  }
+
+  // 删除 Header
+  if (target.dataset.action === 'delete-header') {
+    const ri = parseInt(target.dataset.ri);
+    const hi = parseInt(target.dataset.hi);
+    if (injectRules[ri].headers.length > 1) {
+      injectRules[ri].headers.splice(hi, 1);
+      renderInjectRules();
+    }
+    return;
+  }
+
+  // 添加 Header
+  if (target.dataset.action === 'add-header') {
+    const ri = parseInt(target.dataset.ri);
+    injectRules[ri].headers.push({ name: '', value: '' });
+    renderInjectRules();
+    return;
+  }
+});
+
+injectRulesList.addEventListener('input', (e) => {
+  const target = e.target;
+  if (!target.dataset.ri) return;
+
+  const ri = parseInt(target.dataset.ri);
+  const field = target.dataset.field;
+
+  if (field === 'pattern') {
+    injectRules[ri].pattern = target.value;
+  } else if (field === 'name' || field === 'value') {
+    const hi = parseInt(target.dataset.hi);
+    if (injectRules[ri] && injectRules[ri].headers[hi]) {
+      injectRules[ri].headers[hi][field] = target.value;
+    }
+  }
+});
+
+// ============================================================
+// 添加规则
+// ============================================================
+addRuleBtn.addEventListener('click', () => {
+  const maxId = injectRules.reduce((max, r) => Math.max(max, r.id || 0), 0);
+  injectRules.push({
+    id: maxId + 1,
+    pattern: '',
+    headers: [{ name: '', value: '' }]
+  });
+  renderInjectRules();
+});
+
+// ============================================================
+// 保存注入规则
+// ============================================================
+injectSaveBtn.addEventListener('click', async () => {
+  const validRules = injectRules
+    .filter(r => r.pattern.trim())
+    .map((r, i) => ({
+      id: i + 1,
+      pattern: r.pattern.trim(),
+      headers: r.headers.filter(h => h.name.trim())
+    }));
+
+  const finalRules = validRules.filter(r => r.headers.length > 0);
+
+  try {
+    await chrome.runtime.sendMessage({
+      action: 'saveSettings',
+      settings: { injectRules: finalRules }
+    });
+    injectRules = finalRules.map(r => ({
+      id: r.id,
+      pattern: r.pattern,
+      headers: r.headers.map(h => ({ name: h.name, value: h.value }))
+    }));
+    renderInjectRules();
+    showToast('注入规则已保存');
+  } catch (err) {
+    showToast('保存失败: ' + (err.message || '未知错误'));
+  }
+});
+
+// ============================================================
+// Tab 切换
+// ============================================================
+tabCapture.addEventListener('click', () => {
+  tabCapture.classList.add('active');
+  tabInject.classList.remove('active');
+  panelCapture.classList.remove('hidden');
+  panelInject.classList.add('hidden');
+});
+
+tabInject.addEventListener('click', () => {
+  tabInject.classList.add('active');
+  tabCapture.classList.remove('active');
+  panelInject.classList.remove('hidden');
+  panelCapture.classList.add('hidden');
+  loadInjectRules();
+});
 
 // ============================================================
 // Toast 提示
