@@ -18,7 +18,10 @@ function globToRegex(pattern) {
 function globToUrlFilter(pattern) {
   if (/^(\*:\/\/|[a-z*]+:\/\/)/i.test(pattern)) return pattern;
   if (pattern.startsWith('*')) return '*://' + pattern;
-  return '*://*' + (pattern.startsWith('/') ? '' : '/') + pattern;
+  // Path-only pattern (e.g. /api/*) → prepend *://* to match any host
+  if (pattern.startsWith('/')) return '*://*' + pattern;
+  // Domain+path pattern (e.g. api.example.com/api/*) → prepend just *://
+  return '*://' + pattern;
 }
 
 /**
@@ -188,7 +191,7 @@ function onBeforeSendHeaders(details) {
   });
 }
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   switch (message.action) {
     case 'getCaptures':
       writeQueue.then(() => chrome.storage.local.get('captures')).then(data => {
@@ -217,9 +220,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       // 如果提交的 settings 包含 injectRules，同步到 declarativeNetRequest
       if (message.settings.injectRules !== undefined) {
-        syncInjectRules(cachedSettings.injectRules).catch(err => {
+        try {
+          await syncInjectRules(cachedSettings.injectRules);
+        } catch (err) {
           console.error('saveSettings: syncInjectRules failed', err);
-        });
+          sendResponse({ success: false, error: 'DNR sync failed: ' + err.message });
+          return true;
+        }
       }
 
       chrome.storage.local.set({ settings: cachedSettings }).then(() => {
@@ -231,9 +238,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-loadSettings().then(() => {
+loadSettings().then(async () => {
   compilePatterns(cachedSettings.urlPatterns);
-  syncInjectRules(cachedSettings.injectRules || []);
+  const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
+  registeredRuleIds = existingRules.map(r => r.id);
+  syncInjectRules(cachedSettings.injectRules || []).catch(err => {
+    console.error('init: syncInjectRules failed', err);
+  });
   chrome.webRequest.onBeforeSendHeaders.addListener(
     onBeforeSendHeaders,
     { urls: ['<all_urls>'] },
