@@ -188,3 +188,141 @@ body {
   transition: opacity 0.2s;
 }
 .toast.show { opacity: 1; }
+
+/* ============================================
+   Tab 切换
+   ============================================ */
+.tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 10px;
+  border-bottom: 2px solid #e5e7eb;
+}
+.tab {
+  flex: 1;
+  padding: 7px 0;
+  border: none;
+  background: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab:hover { color: #374151; }
+.tab.active {
+  color: #3b82f6;
+  border-bottom-color: #3b82f6;
+}
+.tab-panel.hidden { display: none; }
+
+/* ============================================
+   注入规则列表
+   ============================================ */
+.inject-rules-list {
+  max-height: 320px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+.inject-rule-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+.inject-rule-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.inject-rule-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #374151;
+}
+.btn-icon {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+}
+.btn-icon:hover { color: #ef4444; }
+
+.inject-rule-card .pattern-input {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: monospace;
+  margin-bottom: 8px;
+}
+.inject-rule-card .pattern-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.inject-header-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+  align-items: center;
+}
+.inject-header-row input {
+  flex: 1;
+  padding: 4px 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: monospace;
+  min-width: 0;
+}
+.inject-header-row input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+.inject-header-row .key-input { flex: 0.4; }
+.inject-header-row .val-input { flex: 0.55; }
+.inject-header-row .btn-icon { flex: 0 0 auto; }
+
+.inject-headers-label {
+  font-size: 11px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+.btn-add-header {
+  background: none;
+  border: 1px dashed #d1d5db;
+  color: #6b7280;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 3px 10px;
+  border-radius: 4px;
+  width: 100%;
+  margin-top: 4px;
+}
+.btn-add-header:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+/* 通用 outline 按钮 */
+.btn-outline {
+  padding: 6px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  background: #fff;
+  color: #374151;
+  transition: border-color 0.15s;
+}
+.btn-outline:hover { border-color: #3b82f6; color: #3b82f6; }

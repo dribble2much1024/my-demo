@@ -12,6 +12,19 @@ function globToRegex(pattern) {
 }
 
 /**
+ * 将 glob 模式转为 declarativeNetRequest urlFilter 格式
+ * 若模式不含 scheme，自动补 *://
+ */
+function globToUrlFilter(pattern) {
+  if (/^(\*:\/\/|[a-z*]+:\/\/)/i.test(pattern)) return pattern;
+  if (pattern.startsWith('*')) return '*://' + pattern;
+  // Path-only pattern (e.g. /api/*) → prepend *://* to match any host
+  if (pattern.startsWith('/')) return '*://*' + pattern;
+  // Domain+path pattern (e.g. api.example.com/api/*) → prepend just *://
+  return '*://' + pattern;
+}
+
+/**
  * 按白名单过滤请求头，返回匹配的键值对
  * 匹配规则：大小写不敏感。至少命中一个白名单字段才返回非空结果
  * @param {chrome.webRequest.HttpHeader[]} requestHeaders
@@ -52,11 +65,56 @@ function pruneDedupMap(now) {
   }
 }
 
+/** 当前已注册的 DNR 动态规则 ID 集合，用于增量更新 */
+let registeredRuleIds = [];
+
+/**
+ * 将 injectRules 同步为 declarativeNetRequest 动态规则
+ * @param {Array<{id: number, pattern: string, headers: Array<{name: string, value: string}>}>} injectRules
+ */
+async function syncInjectRules(injectRules) {
+  const removeRuleIds = [...registeredRuleIds];
+
+  if (!injectRules || injectRules.length === 0) {
+    if (removeRuleIds.length > 0) {
+      await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds });
+      registeredRuleIds = [];
+    }
+    return;
+  }
+
+  const addRules = injectRules.map(rule => ({
+    id: rule.id,
+    priority: 1,
+    action: {
+      type: 'modifyHeaders',
+      requestHeaders: rule.headers.map(h => ({
+        header: h.name,
+        operation: 'set',
+        value: h.value
+      }))
+    },
+    condition: {
+      urlFilter: globToUrlFilter(rule.pattern),
+      resourceTypes: ['xmlhttprequest']
+    }
+  }));
+
+  try {
+    await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds, addRules });
+    registeredRuleIds = injectRules.map(r => r.id);
+  } catch (err) {
+    console.error('syncInjectRules: declarativeNetRequest.updateDynamicRules failed', err);
+    throw err;
+  }
+}
+
 // 内存缓存 — Service Worker 生命周期内有效
 let cachedSettings = {
   urlPatterns: [],
   headerFields: [],
-  bufferSize: 50
+  bufferSize: 50,
+  injectRules: []
 };
 const dedupMap = new Map(); // key → timestamp
 let writeQueue = Promise.resolve(); // 串行化 storage 写入以防止竞态条件
@@ -133,7 +191,7 @@ function onBeforeSendHeaders(details) {
   });
 }
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   switch (message.action) {
     case 'getCaptures':
       writeQueue.then(() => chrome.storage.local.get('captures')).then(data => {
@@ -159,6 +217,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'saveSettings':
       cachedSettings = { ...cachedSettings, ...message.settings };
       compilePatterns(cachedSettings.urlPatterns);
+
+      // 如果提交的 settings 包含 injectRules，同步到 declarativeNetRequest
+      if (message.settings.injectRules !== undefined) {
+        try {
+          await syncInjectRules(cachedSettings.injectRules);
+        } catch (err) {
+          console.error('saveSettings: syncInjectRules failed', err);
+          sendResponse({ success: false, error: 'DNR sync failed: ' + err.message });
+          return true;
+        }
+      }
+
       chrome.storage.local.set({ settings: cachedSettings }).then(() => {
         sendResponse({ success: true });
       }).catch(err => {
@@ -168,8 +238,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-loadSettings().then(() => {
+loadSettings().then(async () => {
   compilePatterns(cachedSettings.urlPatterns);
+  const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
+  registeredRuleIds = existingRules.map(r => r.id);
+  syncInjectRules(cachedSettings.injectRules || []).catch(err => {
+    console.error('init: syncInjectRules failed', err);
+  });
   chrome.webRequest.onBeforeSendHeaders.addListener(
     onBeforeSendHeaders,
     { urls: ['<all_urls>'] },
