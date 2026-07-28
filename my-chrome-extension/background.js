@@ -195,6 +195,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'deleteBookmarks':
       (async () => {
         try {
+          await createSnapshot('deleteBookmarks', message.ids);
           for (const id of message.ids) {
             await chrome.bookmarks.remove(id);
           }
@@ -208,6 +209,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'moveBookmarks':
       (async () => {
         try {
+          await createSnapshot('moveBookmarks', message.ids);
           for (const id of message.ids) {
             await chrome.bookmarks.move(id, { parentId: message.parentId });
           }
@@ -221,6 +223,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'renameBookmark':
       (async () => {
         try {
+          await createSnapshot('renameBookmark', [message.id]);
           await chrome.bookmarks.update(message.id, { title: message.title });
           sendResponse({ success: true });
         } catch (err) {
@@ -316,6 +319,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         try {
           await createSnapshot('LLM操作执行', []);
           const plan = message.plan;
+
+          // 验证操作计划：收集所有有效 bookmark id
+          const tree = await chrome.bookmarks.getTree();
+          const validIds = new Set();
+          const validFolderIds = new Set();
+          function collectIds(nodes) {
+            for (const n of nodes) {
+              validIds.add(n.id);
+              if (!n.url) validFolderIds.add(n.id);
+              if (n.children) collectIds(n.children);
+            }
+          }
+          collectIds(tree);
+
           let executed = 0;
           for (const op of plan.operations) {
             await new Promise(r => setTimeout(r, 50));
@@ -329,14 +346,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 }
                 case 'move':
                   for (const id of op.bookmarkIds) {
+                    if (!validIds.has(id)) continue;
+                    if (!validFolderIds.has(op.parentId)) continue;
                     await chrome.bookmarks.move(id, { parentId: op.parentId });
                   }
                   break;
                 case 'rename':
+                  if (!validIds.has(op.bookmarkId)) break;
                   await chrome.bookmarks.update(op.bookmarkId, { title: op.newTitle });
                   break;
                 case 'delete':
                   for (const id of op.bookmarkIds) {
+                    if (!validIds.has(id)) continue;
                     await chrome.bookmarks.remove(id);
                   }
                   break;
@@ -347,6 +368,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
           }
           sendResponse({ success: true, executed, total: plan.operations.length });
+        } catch (err) {
+          sendResponse({ success: false, error: err.message });
+        }
+      })();
+      return true;
+
+    case 'executeClassify':
+      (async () => {
+        try {
+          await createSnapshot('智能分类执行', []);
+          const suggestions = message.suggestions;
+          const tree = await chrome.bookmarks.getTree();
+          const otherBookmarks = tree[1]?.id || '';
+          let executed = 0;
+          let moved = 0;
+
+          for (const s of suggestions) {
+            await new Promise(r => setTimeout(r, 50));
+            try {
+              const folder = await chrome.bookmarks.create({ parentId: otherBookmarks, title: s.folderName });
+              executed++;
+              for (const id of s.bookmarkIds) {
+                try {
+                  await chrome.bookmarks.move(id, { parentId: folder.id });
+                  moved++;
+                } catch (_) { /* skip invalid IDs */ }
+              }
+            } catch (err) {
+              console.warn('Classify folder failed:', s.folderName, err);
+            }
+          }
+          sendResponse({ success: true, executed, moved });
         } catch (err) {
           sendResponse({ success: false, error: err.message });
         }

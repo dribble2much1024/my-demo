@@ -745,21 +745,15 @@ function renderClassifyPreview(suggestions) {
     hideModal();
     showToast('正在执行分类...');
 
-    const operations = [];
-    const tree = await chrome.bookmarks.getTree();
-    const otherBookmarks = tree[1]?.id || '';
-
-    for (const s of suggestions) {
-      const folder = await chrome.bookmarks.create({ parentId: otherBookmarks, title: s.folderName });
-      if (s.bookmarkIds.length > 0) {
-        operations.push({ type: 'move', bookmarkIds: s.bookmarkIds, parentId: folder.id });
+    try {
+      const res = await sendMessage('executeClassify', { suggestions });
+      if (res.success) {
+        showToast(`完成: ${res.executed} 个文件夹，${res.moved} 个书签`);
+      } else {
+        showToast('分类执行失败: ' + (res.error || ''));
       }
-    }
-
-    if (operations.length > 0) {
-      await executePlan(operations);
-    } else {
-      showToast('无需执行任何操作');
+    } catch (e) {
+      showToast('分类执行出错: ' + e.message);
     }
     loadBookmarks();
   });
