@@ -165,6 +165,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ success: false, error: err.message });
       });
       return true;
+
+    case 'deleteBookmarks':
+      (async () => {
+        try {
+          for (const id of message.ids) {
+            await chrome.bookmarks.remove(id);
+          }
+          sendResponse({ success: true });
+        } catch (err) {
+          sendResponse({ success: false, error: err.message });
+        }
+      })();
+      return true;
+
+    case 'moveBookmarks':
+      (async () => {
+        try {
+          for (const id of message.ids) {
+            await chrome.bookmarks.move(id, { parentId: message.parentId });
+          }
+          sendResponse({ success: true });
+        } catch (err) {
+          sendResponse({ success: false, error: err.message });
+        }
+      })();
+      return true;
+
+    case 'renameBookmark':
+      (async () => {
+        try {
+          await chrome.bookmarks.update(message.id, { title: message.title });
+          sendResponse({ success: true });
+        } catch (err) {
+          sendResponse({ success: false, error: err.message });
+        }
+      })();
+      return true;
   }
 });
 
