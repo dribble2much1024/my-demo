@@ -365,3 +365,355 @@ async function loadBookmarks() {
 document.addEventListener('DOMContentLoaded', () => {
   loadBookmarks();
 });
+
+// ============================================================
+// 工具函数
+// ============================================================
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// ============================================================
+// LLM 对话
+// ============================================================
+chatToggle.addEventListener('click', () => {
+  chatPanel.classList.toggle('collapsed');
+  chatToggle.textContent = chatPanel.classList.contains('collapsed') ? '+' : '−';
+});
+
+function addChatMessage(role, content, planActions) {
+  const div = document.createElement('div');
+  div.className = 'chat-msg ' + role;
+  div.textContent = role === 'user' ? content : '';
+  if (role === 'assistant') {
+    if (planActions) {
+      div.innerHTML = '<p>' + escapeHtml(content) + '</p>';
+      for (const op of planActions) {
+        const item = document.createElement('div');
+        item.className = 'plan-item';
+        item.textContent = describeOperation(op);
+        div.appendChild(item);
+      }
+      const btnGroup = document.createElement('div');
+      btnGroup.className = 'chat-action-btns';
+      const execBtn = document.createElement('button');
+      execBtn.className = 'sp-btn-primary';
+      execBtn.textContent = '执行';
+      execBtn.addEventListener('click', () => executePlan(planActions));
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'sp-btn-small';
+      cancelBtn.textContent = '取消';
+      cancelBtn.addEventListener('click', () => addChatMessage('assistant', '已取消'));
+      btnGroup.appendChild(execBtn);
+      btnGroup.appendChild(cancelBtn);
+      div.appendChild(btnGroup);
+    } else {
+      div.textContent = content;
+    }
+  }
+  chatMessages.appendChild(div);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function describeOperation(op) {
+  switch (op.type) {
+    case 'createFolder': return '📁 创建文件夹: ' + op.title;
+    case 'move': return '→ 移动 ' + (op.bookmarkIds?.length || 0) + ' 个书签';
+    case 'rename': return '✏ 重命名书签 → ' + op.newTitle;
+    case 'delete': return '🗑 删除 ' + (op.bookmarkIds?.length || 0) + ' 个书签';
+    default: return JSON.stringify(op);
+  }
+}
+
+async function executePlan(plan) {
+  try {
+    const res = await sendMessage('executePlan', { plan });
+    if (res.success) {
+      addChatMessage('assistant', '完成: ' + res.executed + '/' + res.total + ' 个操作已执行');
+      loadBookmarks();
+    } else {
+      addChatMessage('assistant', '执行失败: ' + res.error);
+    }
+  } catch (e) {
+    addChatMessage('assistant', '执行出错: ' + e.message);
+  }
+}
+
+document.getElementById('chat-send').addEventListener('click', async () => {
+  const msg = chatInputEl.value.trim();
+  if (!msg) return;
+  addChatMessage('user', msg);
+  chatInputEl.value = '';
+
+  addChatMessage('assistant', '分析中...');
+  try {
+    const res = await sendMessage('llmChat', { userMessage: msg });
+    chatMessages.lastChild?.remove();
+
+    if (res.error) {
+      addChatMessage('assistant', '错误: ' + res.error);
+    } else if (res.plan) {
+      addChatMessage('assistant', res.plan.explanation || '建议以下操作:', res.plan.operations);
+    }
+  } catch (e) {
+    chatMessages.lastChild?.remove();
+    addChatMessage('assistant', '请求失败: ' + e.message);
+  }
+});
+
+// 回车发送
+chatInputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    document.getElementById('chat-send').click();
+  }
+});
+
+// ============================================================
+// 智能分类按钮
+// ============================================================
+document.getElementById('smart-classify-btn').addEventListener('click', async () => {
+  showModal('<h2>正在分析书签...</h2><div id="classify-progress">准备中...</div>');
+  try {
+    const res = await sendMessage('smartClassify');
+    if (res.error) {
+      showModal('<h2>分类失败</h2><p>' + escapeHtml(res.error) + '</p><button id="modal-cancel" class="sp-btn-small">关闭</button>');
+      modalContent.querySelector('#modal-cancel')?.addEventListener('click', hideModal);
+      return;
+    }
+    if (res.suggestions) {
+      renderClassifyPreview(res.suggestions);
+    }
+  } catch (e) {
+    showModal('<h2>分类失败</h2><p>' + escapeHtml(e.message) + '</p><button id="modal-cancel" class="sp-btn-small">关闭</button>');
+    modalContent.querySelector('#modal-cancel')?.addEventListener('click', hideModal);
+  }
+});
+
+function renderClassifyPreview(suggestions) {
+  const foldersHtml = suggestions.map(s => {
+    let itemsHtml = '';
+    for (const id of s.bookmarkIds) {
+      const bm = findBookmarkById(id);
+      if (bm) itemsHtml += '<li>' + escapeHtml(bm.title) + '</li>';
+    }
+    return '<details style="margin:4px 0;">' +
+      '<summary>📁 ' + escapeHtml(s.folderName) + ' (' + s.bookmarkIds.length + ')</summary>' +
+      '<ul style="font-size:11px;color:#6b7280;padding-left:16px;">' + itemsHtml + '</ul>' +
+      '</details>';
+  }).join('');
+
+  const html =
+    '<h2>智能分类建议</h2>' +
+    '<div style="max-height:300px;overflow-y:auto;margin:8px 0;">' + foldersHtml + '</div>' +
+    '<div style="display:flex;gap:8px;margin-top:12px;">' +
+    '<button id="classify-exec" class="sp-btn-primary">确认执行</button>' +
+    '<button id="classify-cancel" class="sp-btn-small">取消</button>' +
+    '</div>';
+  showModal(html);
+
+  document.getElementById('classify-cancel').addEventListener('click', hideModal);
+  document.getElementById('classify-exec').addEventListener('click', async () => {
+    hideModal();
+    showToast('正在执行分类...');
+
+    const operations = [];
+    const tree = await chrome.bookmarks.getTree();
+    const otherBookmarks = tree[1]?.id || '';
+
+    for (const s of suggestions) {
+      const folder = await chrome.bookmarks.create({ parentId: otherBookmarks, title: s.folderName });
+      if (s.bookmarkIds.length > 0) {
+        operations.push({ type: 'move', bookmarkIds: s.bookmarkIds, parentId: folder.id });
+      }
+    }
+
+    if (operations.length > 0) {
+      await executePlan(operations);
+    } else {
+      showToast('无需执行任何操作');
+    }
+    loadBookmarks();
+  });
+}
+
+// ============================================================
+// 清理书签按钮
+// ============================================================
+document.getElementById('clean-btn').addEventListener('click', async () => {
+  showModal('<h2>正在扫描书签...</h2><div id="clean-progress">检测失效链接中...</div>');
+  try {
+    const res = await sendMessage('cleanBookmarks');
+
+    const deadCount = res.deadLinks?.length || 0;
+    const dupCount = res.duplicates?.length || 0;
+
+    if (deadCount === 0 && dupCount === 0) {
+      showModal('<h2>清理结果</h2><p>未发现失效或重复书签 ✅</p><button id="modal-cancel" class="sp-btn-small">关闭</button>');
+      modalContent.querySelector('#modal-cancel')?.addEventListener('click', hideModal);
+      return;
+    }
+
+    renderCleanupPreview(res);
+  } catch (e) {
+    showModal('<h2>扫描失败</h2><p>' + escapeHtml(e.message) + '</p><button id="modal-cancel" class="sp-btn-small">关闭</button>');
+    modalContent.querySelector('#modal-cancel')?.addEventListener('click', hideModal);
+  }
+});
+
+function renderCleanupPreview(result) {
+  const { deadLinks, duplicates, llmSuggestions } = result;
+
+  let deadHtml = '';
+  if (deadLinks.length > 0) {
+    deadHtml = '<h3>❌ 失效链接 (' + deadLinks.length + ')</h3>';
+    for (const d of deadLinks) {
+      const suggestion = llmSuggestions?.deadSuggestions?.find(s => s.id === d.id);
+      deadHtml +=
+        '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;">' +
+        '<input type="checkbox" class="clean-dead-cb" data-id="' + d.id + '" checked>' +
+        '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(d.title) + '</span>' +
+        '<span style="color:#9ca3af;">' + (d.status || '超时') + '</span>' +
+        (suggestion ? '<span style="color:#3b82f6;font-size:11px;">建议: ' + escapeHtml(suggestion.suggestion) + '</span>' : '') +
+        '</div>';
+    }
+  }
+
+  let dupHtml = '';
+  if (duplicates.length > 0) {
+    dupHtml = '<h3>⚠ 重复书签 (' + duplicates.length + ' 组)</h3>';
+    duplicates.forEach((group, gi) => {
+      const keepId = llmSuggestions?.dupReview?.find(r => r.groupId === gi)?.keepId || group.recommended;
+      dupHtml += '<p style="font-size:11px;color:#6b7280;margin-top:4px;">重复组 #' + (gi + 1) + ':</p>';
+      for (const item of group.items) {
+        const isKeep = item.id === keepId;
+        dupHtml +=
+          '<div style="display:flex;align-items:center;gap:8px;padding:2px 0;font-size:12px;">' +
+          '<input type="checkbox" class="clean-dup-cb" data-id="' + item.id + '" ' + (isKeep ? '' : 'checked') + '>' +
+          '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(item.title) + '</span>' +
+          '<span style="color:#9ca3af;font-size:11px;">' + (isKeep ? '保留' : '建议删除') + '</span>' +
+          '</div>';
+      }
+    });
+  }
+
+  const html =
+    '<h2>清理预览</h2>' +
+    '<div style="max-height:350px;overflow-y:auto;">' + deadHtml + dupHtml + '</div>' +
+    '<div style="display:flex;gap:8px;margin-top:12px;">' +
+    '<button id="clean-exec" class="sp-btn-primary">确认清理</button>' +
+    '<button id="clean-cancel" class="sp-btn-small">取消</button>' +
+    '</div>';
+  showModal(html);
+
+  document.getElementById('clean-cancel').addEventListener('click', hideModal);
+  document.getElementById('clean-exec').addEventListener('click', async () => {
+    const toDelete = [];
+    modalContent.querySelectorAll('.clean-dead-cb:checked, .clean-dup-cb:checked').forEach(cb => toDelete.push(cb.dataset.id));
+    if (toDelete.length === 0) { hideModal(); return; }
+    if (!confirm('确认删除 ' + toDelete.length + ' 个书签？')) return;
+    try {
+      await sendMessage('deleteBookmarks', { ids: toDelete });
+      hideModal();
+      showToast('已清理 ' + toDelete.length + ' 个书签');
+      loadBookmarks();
+    } catch (e) {
+      showToast('清理失败');
+    }
+  });
+}
+
+// ============================================================
+// 撤销按钮
+// ============================================================
+document.getElementById('undo-btn').addEventListener('click', async () => {
+  try {
+    const data = await chrome.storage.local.get('snapshots');
+    const snapshots = data.snapshots || [];
+    if (snapshots.length === 0) {
+      showToast('没有可撤销的操作');
+      return;
+    }
+
+    const listHtml = snapshots.slice().reverse().map(s =>
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f3f4f6;">' +
+      '<div>' +
+      '<span style="font-size:12px;font-weight:500;">' + escapeHtml(s.operation) + '</span>' +
+      '<span style="font-size:11px;color:#9ca3af;margin-left:8px;">' + new Date(s.timestamp).toLocaleString() + '</span>' +
+      '</div>' +
+      '<button class="sp-btn-small undo-restore-btn" data-sid="' + s.id + '">撤销</button>' +
+      '</div>'
+    ).join('');
+
+    const html =
+      '<h2>操作历史</h2>' +
+      '<div style="max-height:300px;overflow-y:auto;">' + (listHtml || '<p>暂无记录</p>') + '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+      '<button id="export-backup-btn" class="sp-btn-small">导出备份</button>' +
+      '<button id="import-backup-btn" class="sp-btn-small">导入备份</button>' +
+      '<button id="modal-cancel" class="sp-btn-small">关闭</button>' +
+      '</div>';
+    showModal(html);
+
+    modalContent.querySelectorAll('.undo-restore-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const sid = btn.dataset.sid;
+        const snap = snapshots.find(s => s.id === sid);
+        if (!snap) return;
+        if (!confirm('撤销操作 "' + snap.operation + '"？此操作将恢复书签到 ' + new Date(snap.timestamp).toLocaleString() + ' 的状态。')) return;
+        try {
+          await sendMessage('restoreSnapshot', { snapshotId: sid });
+          hideModal();
+          showToast('已撤销');
+          loadBookmarks();
+        } catch (e) {
+          showToast('撤销失败');
+        }
+      });
+    });
+
+    modalContent.querySelector('#modal-cancel')?.addEventListener('click', hideModal);
+
+    // 导出备份
+    document.getElementById('export-backup-btn').addEventListener('click', async () => {
+      const tree = await chrome.bookmarks.getTree();
+      const storageData = await chrome.storage.local.get(['snapshots', 'bookmarkMeta']);
+      const backup = { tree, snapshots: storageData.snapshots, bookmarkMeta: storageData.bookmarkMeta, exportedAt: Date.now() };
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'bookmarks-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('备份已下载');
+    });
+
+    // 导入备份
+    document.getElementById('import-backup-btn').addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      input.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+          const text = await file.text();
+          const backup = JSON.parse(text);
+          if (!backup.tree) throw new Error('无效的备份文件');
+          await sendMessage('restoreFromBackup', { backup });
+          hideModal();
+          showToast('备份已恢复');
+          loadBookmarks();
+        } catch (err) {
+          showToast('导入失败: ' + err.message);
+        }
+      });
+      input.click();
+    });
+  } catch (e) {
+    showToast('加载操作历史失败');
+  }
+});
