@@ -412,6 +412,71 @@ function escapeHtml(text) {
 }
 
 // ============================================================
+// 文件夹健康检查 (M9)
+// ============================================================
+function runFolderHealthCheck() {
+  const issues = [];
+  const allFolders = [];
+
+  function scan(nodes, depth = 0) {
+    for (const n of nodes) {
+      if (!n.url) {
+        const bookmarkCount = (n.children || []).filter(c => c.url).length;
+        const folderCount = (n.children || []).filter(c => !c.url).length;
+        allFolders.push({ id: n.id, title: n.title, depth, bookmarkCount, folderCount, totalChildren: (n.children || []).length });
+
+        if (bookmarkCount === 0 && folderCount === 0) {
+          issues.push({ id: n.id, title: n.title, type: '空文件夹', severity: 'low' });
+        }
+        if (depth >= 4) {
+          issues.push({ id: n.id, title: n.title, type: '层级过深', severity: 'medium', depth });
+        }
+        if (bookmarkCount > 50) {
+          issues.push({ id: n.id, title: n.title, type: '书签过多 (' + bookmarkCount + '个)', severity: 'medium' });
+        }
+        if (n.children) scan(n.children, depth + 1);
+      }
+    }
+  }
+
+  chrome.bookmarks.getTree().then(tree => {
+    scan(tree);
+
+    const html = `
+      <h2>文件夹健康检查</h2>
+      ${issues.length === 0 ? '<p>所有文件夹状态良好 ✅</p>' : `
+        <p>发现 ${issues.length} 个问题:</p>
+        <div style="max-height:300px;overflow-y:auto;">
+          ${issues.map(issue => `
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f3f4f6;font-size:12px;">
+              <span>${issue.type === '空文件夹' ? '📭' : issue.type === '层级过深' ? '📎' : '📊'}</span>
+              <span style="flex:1;">${escapeHtml(issue.title)}</span>
+              <span style="color:${issue.severity === 'low' ? '#9ca3af' : '#f59e0b'};">${issue.type}${issue.depth ? ' (深度' + issue.depth + ')' : ''}</span>
+              ${issue.type === '空文件夹'
+                ? `<button class="sp-btn-small sp-btn-danger fix-delete-folder" data-id="${issue.id}">删除</button>`
+                : ''}
+            </div>
+          `).join('')}
+        </div>
+      `}
+      <button id="modal-cancel" class="sp-btn-small" style="margin-top:8px;">关闭</button>
+    `;
+    showModal(html);
+
+    modalContent.querySelectorAll('.fix-delete-folder').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        await sendMessage('deleteBookmarks', { ids: [btn.dataset.id] });
+        hideModal();
+        showToast('已删除空文件夹');
+        loadBookmarks();
+      });
+    });
+
+    document.getElementById('modal-cancel')?.addEventListener('click', hideModal);
+  });
+}
+
+// ============================================================
 // LLM 对话
 // ============================================================
 chatToggle.addEventListener('click', () => {
