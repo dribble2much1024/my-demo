@@ -18,8 +18,6 @@ const chatToggle = document.getElementById('chat-toggle');
 // ============================================================
 let bookmarksData = [];       // 展平的书签列表 [{ id, title, url, parentId, ... }]
 let selectedIds = new Set();
-let folderExpandState = {};   // { folderId: bool }
-let contextMenuNode = null;   // 当前右键菜单目标
 
 // ============================================================
 // Toast
@@ -296,8 +294,9 @@ searchInput.addEventListener('input', () => {
   const rows = bookmarkTree.querySelectorAll('.tree-row');
   if (!query) {
     rows.forEach(r => { r.classList.remove('search-hidden', 'search-match'); });
-    // 恢复折叠状态
+    // 恢复折叠状态和箭头图标
     bookmarkTree.querySelectorAll('.tree-children').forEach(c => c.classList.add('collapsed'));
+    bookmarkTree.querySelectorAll('.tree-toggle:not(.empty)').forEach(t => t.textContent = '▸');
     return;
   }
   rows.forEach(r => {
@@ -328,25 +327,17 @@ searchInput.addEventListener('input', () => {
 // 文件夹选择器 (弹窗)
 // ============================================================
 function showFolderPicker(title, callback) {
-  const folders = [];
-  function collectFolders(nodes) {
-    for (const n of nodes) {
-      if (!n.url) folders.push({ id: n.id, title: n.title, depth: 0 });
-      if (n.children) collectFolders(n.children);
-    }
-  }
+  showModal(`<h2>${title}</h2><div class="folder-list" style="max-height:250px;overflow-y:auto;">加载中...</div><button id="modal-cancel" class="sp-btn-small" style="margin-top:8px;">取消</button>`);
+  modalContent.querySelector('#modal-cancel')?.addEventListener('click', hideModal);
 
-  const html = `
-    <h2>${title}</h2>
-    <div class="folder-list" style="max-height:250px;overflow-y:auto;">
-      ${folders.map(f => `<div class="folder-option" data-id="${f.id}" style="padding:6px 8px;cursor:pointer;border-radius:4px;">📁 ${f.title}</div>`).join('')}
-    </div>
-    <button id="modal-cancel" class="sp-btn-small" style="margin-top:8px;">取消</button>
-  `;
-  showModal(html);
-
-  // 收集文件夹
   chrome.bookmarks.getTree().then(tree => {
+    const folders = [];
+    function collectFolders(nodes) {
+      for (const n of nodes) {
+        if (!n.url) folders.push({ id: n.id, title: n.title });
+        if (n.children) collectFolders(n.children);
+      }
+    }
     collectFolders(tree);
     const list = modalContent.querySelector('.folder-list');
     list.innerHTML = folders.map(f =>
@@ -356,8 +347,6 @@ function showFolderPicker(title, callback) {
       opt.addEventListener('click', () => { hideModal(); callback(opt.dataset.id); });
     });
   });
-
-  modalContent.querySelector('#modal-cancel')?.addEventListener('click', hideModal);
 }
 
 // ============================================================
