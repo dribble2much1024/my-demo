@@ -477,6 +477,84 @@ function runFolderHealthCheck() {
 }
 
 // ============================================================
+// 书签统计面板 (M10)
+// ============================================================
+document.getElementById('stats-btn').addEventListener('click', async () => {
+  const tree = await chrome.bookmarks.getTree();
+  let totalBookmarks = 0;
+  let totalFolders = 0;
+  const domainCounts = {};
+  const folderSizes = [];
+  const recentBookmarks = [];
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+  function scan(nodes) {
+    for (const n of nodes) {
+      if (n.url) {
+        totalBookmarks++;
+        try { domainCounts[new URL(n.url).hostname] = (domainCounts[new URL(n.url).hostname] || 0) + 1; } catch (_) {}
+        if (n.dateAdded && n.dateAdded > weekAgo) recentBookmarks.push(n);
+      } else {
+        totalFolders++;
+        const bmCount = (n.children || []).filter(c => c.url).length;
+        if (bmCount > 0) folderSizes.push({ title: n.title, count: bmCount });
+      }
+      if (n.children) scan(n.children);
+    }
+  }
+  scan(tree);
+
+  folderSizes.sort((a, b) => b.count - a.count);
+  const topDomains = Object.entries(domainCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const topFolders = folderSizes.slice(0, 10);
+
+  const maxFolderSize = topFolders[0]?.count || 1;
+  const folderBars = topFolders.map(f => {
+    const pct = Math.round(f.count / maxFolderSize * 100);
+    return `<div style="margin:2px 0;"><span style="font-size:11px;">${escapeHtml(f.title)}</span>
+      <div style="height:6px;background:#e5e7eb;border-radius:3px;margin-top:2px;">
+        <div style="height:100%;width:${pct}%;background:#3b82f6;border-radius:3px;"></div>
+      </div><span style="font-size:10px;color:#9ca3af;">${f.count} 个</span></div>`;
+  }).join('');
+
+  const html = `
+    <h2>书签统计</h2>
+    <div style="display:flex;gap:12px;margin-bottom:12px;">
+      <div style="flex:1;text-align:center;background:#f3f4f6;border-radius:8px;padding:8px;">
+        <div style="font-size:22px;font-weight:700;">${totalBookmarks}</div>
+        <div style="font-size:11px;color:#6b7280;">书签总数</div>
+      </div>
+      <div style="flex:1;text-align:center;background:#f3f4f6;border-radius:8px;padding:8px;">
+        <div style="font-size:22px;font-weight:700;">${totalFolders}</div>
+        <div style="font-size:11px;color:#6b7280;">文件夹</div>
+      </div>
+    </div>
+    <h3 style="font-size:12px;margin:8px 0;">📊 文件夹书签分布 (Top 10)</h3>
+    ${folderBars}
+    <h3 style="font-size:12px;margin:8px 0;">🌐 域名 Top 5</h3>
+    ${topDomains.map(([domain, count], i) =>
+      `<div style="font-size:11px;padding:2px 0;">${i + 1}. ${domain} (${count})</div>`
+    ).join('')}
+    <h3 style="font-size:12px;margin:8px 0;">🆕 最近 7 天添加 (${recentBookmarks.length})</h3>
+    <div style="max-height:120px;overflow-y:auto;font-size:11px;color:#6b7280;">
+      ${recentBookmarks.slice(0, 15).map(b =>
+        `<div style="padding:2px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🔖 ${escapeHtml(b.title)}</div>`
+      ).join('')}
+    </div>
+    <button id="health-check-btn" class="sp-btn-small" style="margin-top:8px;">🔍 文件夹健康检查</button>
+    <button id="modal-cancel" class="sp-btn-small" style="margin-top:8px;">关闭</button>
+  `;
+  showModal(html);
+
+  document.getElementById('health-check-btn')?.addEventListener('click', () => {
+    hideModal();
+    runFolderHealthCheck();
+  });
+
+  document.getElementById('modal-cancel')?.addEventListener('click', hideModal);
+});
+
+// ============================================================
 // LLM 对话
 // ============================================================
 chatToggle.addEventListener('click', () => {
