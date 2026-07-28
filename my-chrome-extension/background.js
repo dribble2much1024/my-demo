@@ -676,6 +676,18 @@ folderName 使用中文，覆盖主要技术/工具/阅读/社交/购物/视频�
   }
 });
 
+// ============================================================
+// 键盘快捷键 (M11)
+// ============================================================
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command === 'open-bookmark-sidepanel') {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    await chrome.sidePanel.open({ windowId: tab.windowId });
+  } else if (command === 'focus-search') {
+    chrome.runtime.sendMessage({ action: 'focusSearch' }).catch(() => {});
+  }
+});
+
 loadSettings().then(() => {
   compilePatterns(cachedSettings.urlPatterns);
   chrome.webRequest.onBeforeSendHeaders.addListener(

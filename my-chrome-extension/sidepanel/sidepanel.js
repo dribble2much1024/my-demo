@@ -555,6 +555,15 @@ document.getElementById('stats-btn').addEventListener('click', async () => {
 });
 
 // ============================================================
+// 监听快捷键聚焦搜索
+// ============================================================
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.action === 'focusSearch') {
+    searchInput.focus();
+  }
+});
+
+// ============================================================
 // LLM 对话
 // ============================================================
 chatToggle.addEventListener('click', () => {
