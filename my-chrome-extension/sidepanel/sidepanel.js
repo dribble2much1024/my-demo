@@ -45,6 +45,41 @@ modalOverlay.addEventListener('click', (e) => {
 });
 
 // ============================================================
+// 书签详情面板 (标签与备注)
+// ============================================================
+function showDetailPanel(node) {
+  const html = `
+    <h2>${escapeHtml(node.title)}</h2>
+    <p style="font-size:11px;color:#9ca3af;word-break:break-all;">${escapeHtml(node.url || '(文件夹)')}</p>
+    <label style="display:block;font-size:11px;color:#6b7280;margin-top:8px;">标签 (逗号分隔)</label>
+    <input id="detail-tags" type="text" placeholder="react, tutorial" style="width:100%;padding:4px 6px;border:1px solid #d1d5db;border-radius:4px;font-size:12px;">
+    <label style="display:block;font-size:11px;color:#6b7280;margin-top:8px;">备注</label>
+    <textarea id="detail-note" rows="3" maxlength="500" placeholder="备注..." style="width:100%;padding:4px 6px;border:1px solid #d1d5db;border-radius:4px;font-size:12px;resize:vertical;"></textarea>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <button id="detail-save" class="sp-btn-primary">保存</button>
+      <button id="detail-cancel" class="sp-btn-small">取消</button>
+    </div>
+  `;
+  showModal(html);
+
+  // 加载已有 meta
+  sendMessage('getBookmarkMeta', { id: node.id }).then(res => {
+    document.getElementById('detail-tags').value = (res.meta?.tags || []).join(', ');
+    document.getElementById('detail-note').value = res.meta?.note || '';
+  });
+
+  document.getElementById('detail-save').addEventListener('click', async () => {
+    const tags = document.getElementById('detail-tags').value.split(',').map(s => s.trim()).filter(Boolean);
+    const note = document.getElementById('detail-note').value;
+    await sendMessage('saveBookmarkMeta', { id: node.id, tags, note });
+    hideModal();
+    showToast('已保存');
+  });
+
+  document.getElementById('detail-cancel').addEventListener('click', hideModal);
+}
+
+// ============================================================
 // 展平书签树
 // ============================================================
 function flattenTree(nodes, parentTitle = '', level = 0) {
@@ -146,6 +181,7 @@ function createTreeNode(node) {
   row.addEventListener('click', () => {
     document.querySelectorAll('.tree-row.selected').forEach(r => r.classList.remove('selected'));
     row.classList.add('selected');
+    if (node.url) showDetailPanel(node);
   });
 
   wrapper.appendChild(row);

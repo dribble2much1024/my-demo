@@ -651,6 +651,28 @@ folderName 使用中文，覆盖主要技术/工具/阅读/社交/购物/视频�
         }
       })();
       return true;
+
+    case 'saveBookmarkMeta':
+      (async () => {
+        try {
+          const data = await chrome.storage.local.get('bookmarkMeta');
+          const meta = data.bookmarkMeta || {};
+          meta[message.id] = { tags: message.tags || [], note: message.note || '' };
+          await chrome.storage.local.set({ bookmarkMeta: meta });
+          sendResponse({ success: true });
+        } catch (err) {
+          sendResponse({ success: false, error: err.message });
+        }
+      })();
+      return true;
+
+    case 'getBookmarkMeta':
+      (async () => {
+        const data = await chrome.storage.local.get('bookmarkMeta');
+        const meta = (data.bookmarkMeta || {})[message.id] || { tags: [], note: '' };
+        sendResponse({ meta });
+      })();
+      return true;
   }
 });
 
