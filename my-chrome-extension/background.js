@@ -423,8 +423,6 @@ folderName 使用中文，覆盖主要技术/工具/阅读/社交/购物/视频�
               const result = JSON.parse(jsonMatch[0]);
               if (result.suggestions) allSuggestions.push(...result.suggestions);
             }
-
-            sendResponse({ progress: { current: bi + 1, total: batches.length } });
           }
 
           const merged = {};
@@ -474,7 +472,6 @@ folderName 使用中文，覆盖主要技术/工具/阅读/社交/购物/视频�
                 deadLinks.push(r.value);
               }
             }
-            sendResponse({ progress: { phase: 'deadCheck', current: Math.min(i + concurrency, allBookmarks.length), total: allBookmarks.length } });
           }
 
           function normalizeUrl(url) {
@@ -568,6 +565,9 @@ folderName 使用中文，覆盖主要技术/工具/阅读/社交/购物/视频�
             sendResponse({ success: false, error: '快照不存在' });
             return;
           }
+
+          // 撤销前先创建当前状态快照，以便可重做
+          await createSnapshot('撤销前状态', []);
 
           const currentTree = await chrome.bookmarks.getTree();
           async function removeAll(nodes) {
