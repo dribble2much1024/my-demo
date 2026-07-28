@@ -555,6 +555,44 @@ document.getElementById('stats-btn').addEventListener('click', async () => {
 });
 
 // ============================================================
+// 批量操作增强 (M8)
+// ============================================================
+// 批量导出
+function bulkExport() {
+  const selected = [];
+  for (const id of selectedIds) {
+    const bm = findBookmarkById(id);
+    if (bm) selected.push({ id: bm.id, title: bm.title, url: bm.url, parentTitle: bm.parentTitle });
+  }
+  const blob = new Blob([JSON.stringify(selected, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `selected-bookmarks-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(`已导出 ${selected.length} 个书签`);
+}
+
+// 批量添加标签
+async function bulkAddTag() {
+  const tag = prompt('输入要添加的标签:');
+  if (!tag) return;
+  let count = 0;
+  for (const id of selectedIds) {
+    const res = await sendMessage('getBookmarkMeta', { id });
+    const tags = res.meta?.tags || [];
+    if (!tags.includes(tag)) tags.push(tag);
+    await sendMessage('saveBookmarkMeta', { id, tags, note: res.meta?.note || '' });
+    count++;
+  }
+  showToast(`已为 ${count} 个书签添加标签 "${tag}"`);
+}
+
+document.getElementById('bulk-export').addEventListener('click', bulkExport);
+document.getElementById('bulk-add-tag').addEventListener('click', bulkAddTag);
+
+// ============================================================
 // 监听快捷键聚焦搜索
 // ============================================================
 chrome.runtime.onMessage.addListener((message) => {
