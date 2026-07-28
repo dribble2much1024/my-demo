@@ -156,7 +156,8 @@ body {
   margin-top: 8px;
 }
 .settings-panel textarea,
-.settings-panel input[type="text"] {
+.settings-panel input[type="text"],
+.settings-panel input[type="password"] {
   width: 100%;
   padding: 6px 8px;
   border: 1px solid #d1d5db;
@@ -188,3 +189,53 @@ body {
   transition: opacity 0.2s;
 }
 .toast.show { opacity: 1; }
+
+/* Tab 导航 */
+.tab-nav {
+  display: flex;
+  border-bottom: 2px solid #e5e7eb;
+  margin-bottom: 10px;
+}
+.tab-btn {
+  flex: 1;
+  padding: 8px 0;
+  border: none;
+  background: none;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab-btn.active {
+  color: #3b82f6;
+  border-bottom-color: #3b82f6;
+}
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* 书签入口 */
+.bookmark-quick-stats {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.stat-item {
+  flex: 1;
+  text-align: center;
+  background: #f3f4f6;
+  border-radius: 8px;
+  padding: 12px 8px;
+}
+.stat-value {
+  display: block;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+.stat-label {
+  font-size: 11px;
+  color: #6b7280;
+}

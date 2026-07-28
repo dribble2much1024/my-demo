@@ -31,6 +31,7 @@ document.addEventListener('DOMContentLoaded', init);
 // 初始化
 // ============================================================
 async function init() {
+  await loadLlmConfig();
   await loadSettings();
   await loadCaptures();
 }
@@ -224,4 +225,92 @@ saveBtn.addEventListener('click', async () => {
 
 settingsToggle.addEventListener('click', () => {
   settingsPanel.classList.toggle('hidden');
+});
+
+// ============================================================
+// Tab 切换
+// ============================================================
+const tabHeader = document.getElementById('tab-header');
+const tabBookmark = document.getElementById('tab-bookmark');
+const panelHeader = document.getElementById('panel-header');
+const panelBookmark = document.getElementById('panel-bookmark');
+
+tabHeader.addEventListener('click', () => {
+  tabHeader.classList.add('active');
+  tabBookmark.classList.remove('active');
+  panelHeader.classList.add('active');
+  panelBookmark.classList.remove('active');
+});
+
+tabBookmark.addEventListener('click', () => {
+  tabBookmark.classList.add('active');
+  tabHeader.classList.remove('active');
+  panelBookmark.classList.add('active');
+  panelHeader.classList.remove('active');
+  loadBookmarkStats();
+});
+
+// ============================================================
+// 书签管理入口
+// ============================================================
+document.getElementById('open-sidepanel-btn').addEventListener('click', async () => {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  await chrome.sidePanel.open({ windowId: tab.windowId });
+  window.close();
+});
+
+async function loadBookmarkStats() {
+  try {
+    const tree = await chrome.bookmarks.getTree();
+    let total = 0;
+    let folders = 0;
+    function count(node) {
+      if (node.url) total++;
+      else folders++;
+      if (node.children) node.children.forEach(count);
+    }
+    count(tree[0]);
+    count(tree[1]);
+    document.getElementById('stat-total').textContent = total;
+    document.getElementById('stat-folders').textContent = folders;
+    document.getElementById('bookmark-stat').textContent = total;
+  } catch (e) {
+    console.warn('Failed to load bookmark stats', e);
+  }
+}
+
+// ============================================================
+// LLM 配置
+// ============================================================
+const llmSettingsToggle = document.getElementById('llm-settings-toggle');
+const llmSettingsPanel = document.getElementById('llm-settings-panel');
+const llmEndpoint = document.getElementById('llm-endpoint');
+const llmApikey = document.getElementById('llm-apikey');
+const llmModel = document.getElementById('llm-model');
+const llmSaveBtn = document.getElementById('llm-save-btn');
+
+llmSettingsToggle.addEventListener('click', () => {
+  llmSettingsPanel.classList.toggle('hidden');
+});
+
+async function loadLlmConfig() {
+  try {
+    const data = await chrome.storage.local.get('llmConfig');
+    if (data.llmConfig) {
+      llmEndpoint.value = data.llmConfig.endpoint || '';
+      llmApikey.value = data.llmConfig.apiKey || '';
+      llmModel.value = data.llmConfig.model || '';
+    }
+  } catch (e) { /* ignore */ }
+}
+
+llmSaveBtn.addEventListener('click', async () => {
+  await chrome.storage.local.set({
+    llmConfig: {
+      endpoint: llmEndpoint.value.trim(),
+      apiKey: llmApikey.value.trim(),
+      model: llmModel.value.trim()
+    }
+  });
+  showToast('LLM 配置已保存');
 });
