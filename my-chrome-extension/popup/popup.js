@@ -269,8 +269,7 @@ async function loadBookmarkStats() {
       else folders++;
       if (node.children) node.children.forEach(count);
     }
-    count(tree[0]);
-    count(tree[1]);
+    if (tree[0] && tree[0].children) tree[0].children.forEach(count);
     document.getElementById('stat-total').textContent = total;
     document.getElementById('stat-folders').textContent = folders;
     document.getElementById('bookmark-stat').textContent = total;
