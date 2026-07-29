@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <div class="sp-container">
+    <!-- 顶部工具栏 -->
+    <header class="sp-header">
+      <h1 class="sp-title">书签管理</h1>
+      <div class="sp-toolbar">
+        <button id="smart-classify-btn" class="sp-btn-icon" title="智能分类">🧠</button>
+        <button id="clean-btn" class="sp-btn-icon" title="清理书签">🔧</button>
+        <button id="undo-btn" class="sp-btn-icon" title="操作历史">↩</button>
+        <button id="stats-btn" class="sp-btn-icon" title="统计">📊</button>
+      </div>
+    </header>
+
+    <!-- 搜索框 -->
+    <div class="sp-search">
+      <input id="search-input" type="text" placeholder="搜索书签...">
+    </div>
+
+    <!-- 书签树 -->
+    <div id="bookmark-tree" class="sp-tree"></div>
+
+    <!-- 底部多选操作栏 -->
+    <div id="bulk-bar" class="sp-bulk-bar hidden">
+      <span id="bulk-count">选中 0 项</span>
+      <button id="bulk-delete" class="sp-btn-small sp-btn-danger">删除</button>
+      <button id="bulk-move" class="sp-btn-small">移动到...</button>
+      <button id="bulk-open" class="sp-btn-small">打开</button>
+      <button id="bulk-export" class="sp-btn-small">导出</button>
+      <button id="bulk-add-tag" class="sp-btn-small">标签</button>
+    </div>
+
+    <!-- LLM 对话面板 -->
+    <div id="chat-panel" class="sp-chat-panel">
+      <div class="sp-chat-header">
+        <span>💬 书签助手</span>
+        <button id="chat-toggle" class="sp-btn-close">−</button>
+      </div>
+      <div id="chat-messages" class="sp-chat-messages"></div>
+      <div class="sp-chat-input">
+        <input id="chat-input" type="text" placeholder="输入指令，如"把技术类书签整理到开发工具文件夹"...">
+        <button id="chat-send" class="sp-btn-primary">发送</button>
+      </div>
+    </div>
+
+    <!-- 弹窗层 -->
+    <div id="modal-overlay" class="sp-modal-overlay hidden">
+      <div id="modal-content" class="sp-modal"></div>
+    </div>
+
+    <!-- Toast -->
+    <div id="sp-toast" class="sp-toast hidden"></div>
+  </div>
+  <script src="sidepanel.js"></script>
+</body>
+</html>
