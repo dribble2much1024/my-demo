@@ -380,7 +380,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           await createSnapshot('智能分类执行', []);
           const suggestions = message.suggestions;
           const tree = await chrome.bookmarks.getTree();
-          const otherBookmarks = tree[1]?.id || '';
+          const otherBookmarks = tree[0]?.children?.[1]?.id || '';
           let executed = 0;
           let moved = 0;
 
