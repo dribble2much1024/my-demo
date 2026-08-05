@@ -58,17 +58,26 @@
         </div>
       </div>
       <button id="open-sidepanel-btn" class="btn btn-primary full-width">打开书签管理</button>
-      <hr class="divider">
-      <div class="settings-section">
-        <button id="llm-settings-toggle" class="btn-settings">&#x2699; LLM 配置</button>
-        <div id="llm-settings-panel" class="settings-panel hidden">
+      <button id="llm-config-btn" class="btn btn-primary full-width" style="margin-top:8px;">&#x2699; LLM 配置</button>
+    </div>
+    <!-- LLM 配置弹窗 -->
+    <div id="llm-modal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h2>LLM 配置</h2>
+          <button id="llm-modal-close" class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
           <label for="llm-endpoint">API Endpoint</label>
           <input id="llm-endpoint" type="text" placeholder="https://api.openai.com/v1/chat/completions">
           <label for="llm-apikey">API Key</label>
           <input id="llm-apikey" type="password" placeholder="sk-...">
           <label for="llm-model">Model</label>
           <input id="llm-model" type="text" placeholder="gpt-4o-mini">
-          <button id="llm-save-btn" class="btn btn-primary full-width">保存配置</button>
+        </div>
+        <div class="modal-footer">
+          <button id="llm-cancel-btn" class="btn btn-cancel">取消</button>
+          <button id="llm-save-btn" class="btn btn-primary">保存</button>
         </div>
       </div>
     </div>

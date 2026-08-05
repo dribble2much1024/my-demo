@@ -41,8 +41,12 @@ async function init() {
 // ============================================================
 function showToast(msg, duration = 2000) {
   toast.textContent = msg;
+  toast.classList.remove('hidden');
   toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), duration);
+  setTimeout(() => {
+    toast.classList.remove('show');
+    toast.classList.add('hidden');
+  }, duration);
 }
 
 // ============================================================
@@ -279,17 +283,30 @@ async function loadBookmarkStats() {
 }
 
 // ============================================================
-// LLM 配置
+// LLM 配置弹窗
 // ============================================================
-const llmSettingsToggle = document.getElementById('llm-settings-toggle');
-const llmSettingsPanel = document.getElementById('llm-settings-panel');
+const llmConfigBtn = document.getElementById('llm-config-btn');
+const llmModal = document.getElementById('llm-modal');
+const llmModalClose = document.getElementById('llm-modal-close');
 const llmEndpoint = document.getElementById('llm-endpoint');
 const llmApikey = document.getElementById('llm-apikey');
 const llmModel = document.getElementById('llm-model');
 const llmSaveBtn = document.getElementById('llm-save-btn');
+const llmCancelBtn = document.getElementById('llm-cancel-btn');
 
-llmSettingsToggle.addEventListener('click', () => {
-  llmSettingsPanel.classList.toggle('hidden');
+llmConfigBtn.addEventListener('click', () => {
+  llmModal.classList.remove('hidden');
+  llmApikey.focus();
+});
+
+function closeLlmModal() {
+  llmModal.classList.add('hidden');
+}
+
+llmModalClose.addEventListener('click', closeLlmModal);
+llmCancelBtn.addEventListener('click', closeLlmModal);
+llmModal.addEventListener('click', (e) => {
+  if (e.target === llmModal) closeLlmModal();
 });
 
 async function loadLlmConfig() {
@@ -311,5 +328,6 @@ llmSaveBtn.addEventListener('click', async () => {
       model: llmModel.value.trim()
     }
   });
+  closeLlmModal();
   showToast('LLM 配置已保存');
 });

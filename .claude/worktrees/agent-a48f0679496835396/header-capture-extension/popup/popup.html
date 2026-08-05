@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- 顶部标题栏 -->
+    <header class="header">
+      <h1 class="title">Header Capture</h1>
+      <span id="capture-count" class="badge">0</span>
+    </header>
+
+    <!-- 操作按钮 -->
+    <div class="toolbar">
+      <button id="copy-all-btn" class="btn btn-primary" disabled>复制全部</button>
+      <button id="clear-btn" class="btn btn-danger">清空</button>
+    </div>
+
+    <!-- 捕获记录列表 -->
+    <div id="capture-list" class="capture-list">
+      <div id="empty-state" class="empty-state">
+        <p>暂无捕获记录</p>
+        <p class="hint">请确保 URL 匹配规则配置正确</p>
+      </div>
+    </div>
+
+    <!-- 底部分隔线 -->
+    <hr class="divider">
+
+    <!-- 配置区（可折叠）-->
+    <div class="settings-section">
+      <button id="settings-toggle" class="btn-settings">&#x2699; 配置</button>
+      <div id="settings-panel" class="settings-panel hidden">
+        <label for="url-patterns-input">URL 匹配规则（每行一条，支持 * 通配符）</label>
+        <textarea id="url-patterns-input" rows="3" placeholder="*.example.com/api/*"></textarea>
+
+        <label for="header-fields-input">请求头字段（逗号分隔）</label>
+        <input id="header-fields-input" type="text" placeholder="Authorization, Cookie, X-Token">
+
+        <button id="save-btn" class="btn btn-primary full-width">保存配置</button>
+      </div>
+    </div>
+
+    <!-- Toast 提示 -->
+    <div id="toast" class="toast hidden"></div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
