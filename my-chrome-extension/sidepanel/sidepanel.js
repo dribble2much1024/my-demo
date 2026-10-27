@@ -12,6 +12,15 @@ const chatPanel = document.getElementById('chat-panel');
 const chatMessages = document.getElementById('chat-messages');
 const chatInputEl = document.getElementById('chat-input');
 const chatToggle = document.getElementById('chat-toggle');
+const tabBookmarksBtn = document.getElementById('tab-bookmarks');
+const tabSummaryBtn = document.getElementById('tab-summary');
+const viewBookmarks = document.getElementById('view-bookmarks');
+const viewSummary = document.getElementById('view-summary');
+const sumPageTitle = document.getElementById('sum-page-title');
+const sumLength = document.getElementById('sum-length');
+const sumBtn = document.getElementById('sum-btn');
+const sumResult = document.getElementById('sum-result');
+const sumCopyBtn = document.getElementById('sum-copy-btn');
 
 // ============================================================
 // 状态
@@ -398,7 +407,12 @@ async function loadBookmarks() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  const data = await chrome.storage.local.get('sidepanelView');
+  if (data.sidepanelView === 'summary') {
+    switchView('summary');
+    await chrome.storage.local.remove('sidepanelView');
+  }
   loadBookmarks();
 });
 
@@ -599,6 +613,9 @@ chrome.runtime.onMessage.addListener((message) => {
   if (message.action === 'focusSearch') {
     searchInput.focus();
   }
+  if (message.action === 'switchToSummary') {
+    switchView('summary');
+  }
 });
 
 // ============================================================
@@ -627,7 +644,7 @@ function addChatMessage(role, content, planActions) {
       const execBtn = document.createElement('button');
       execBtn.className = 'sp-btn-primary';
       execBtn.textContent = '执行';
-      execBtn.addEventListener('click', () => executePlan(planActions));
+      execBtn.addEventListener('click', () => executePlan({ operations: planActions }));
       const cancelBtn = document.createElement('button');
       cancelBtn.className = 'sp-btn-small';
       cancelBtn.textContent = '取消';
@@ -694,6 +711,65 @@ chatInputEl.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     document.getElementById('chat-send').click();
+  }
+});
+
+// ============================================================
+// 页面总结 (Tab)
+// ============================================================
+function switchView(view) {
+  const isSummary = view === 'summary';
+  tabSummaryBtn.classList.toggle('active', isSummary);
+  tabBookmarksBtn.classList.toggle('active', !isSummary);
+  viewSummary.classList.toggle('hidden', !isSummary);
+  viewBookmarks.classList.toggle('hidden', isSummary);
+  if (isSummary) loadCurrentPageInfo();
+}
+
+tabBookmarksBtn.addEventListener('click', () => switchView('bookmarks'));
+tabSummaryBtn.addEventListener('click', () => switchView('summary'));
+
+async function loadCurrentPageInfo() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    sumPageTitle.textContent = tab?.title || '(无标题)';
+  } catch (_) {
+    sumPageTitle.textContent = '(无法读取页面)';
+  }
+}
+
+let lastSummary = '';
+
+sumBtn.addEventListener('click', async () => {
+  sumBtn.disabled = true;
+  sumBtn.textContent = '总结中...';
+  sumResult.textContent = '';
+  sumCopyBtn.classList.add('hidden');
+  try {
+    const res = await sendMessage('summarizePage', { length: sumLength.value });
+    if (res.error) {
+      sumResult.textContent = '错误: ' + res.error;
+    } else {
+      lastSummary = res.summary;
+      if (res.title) sumPageTitle.textContent = res.title;
+      sumResult.textContent = res.summary;
+      sumCopyBtn.classList.remove('hidden');
+    }
+  } catch (e) {
+    sumResult.textContent = '请求失败: ' + e.message;
+  } finally {
+    sumBtn.disabled = false;
+    sumBtn.textContent = '总结';
+  }
+});
+
+sumCopyBtn.addEventListener('click', async () => {
+  if (!lastSummary) return;
+  try {
+    await navigator.clipboard.writeText(lastSummary);
+    showToast('已复制总结');
+  } catch (_) {
+    showToast('复制失败');
   }
 });
 

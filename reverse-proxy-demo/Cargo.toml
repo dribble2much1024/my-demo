@@ -1,0 +1,30 @@
+[package]
+name = "reverse-proxy-demo"
+version = "0.1.0"
+edition = "2021"
+description = "教学版 HTTP/1.1 反向代理与负载均衡器（Tokio + Axum + Reqwest）"
+
+[lib]
+name = "reverse_proxy_demo"
+path = "src/lib.rs"
+
+[[bin]]
+name = "reverse-proxy-demo"
+path = "src/main.rs"
+
+[[bin]]
+name = "demo-backend"
+path = "src/bin/demo-backend.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = "0.8"
+# 关闭默认 feature（native-tls / gzip / cookie 等），改用 rustls 跨平台免 OpenSSL，
+# 且不自动解压响应体，保证代理原样转发 Content-Encoding 语义。
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+url = "2"
+http = "1"
+anyhow = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

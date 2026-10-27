@@ -1,0 +1,41 @@
+{
+  "name": "badcase-capability-suite",
+  "description": "从测评失败自动生成的能力测评集",
+  "version": "1.0.0",
+  "threshold": 80,
+  "trials": 1,
+  "cases": [
+    {
+      "id": "badcase-trigger-pos-01",
+      "name": "BadCase: 正向触发: 读取文件分析",
+      "description": "从失败用例 trigger-pos-01 自动生成的增强测试",
+      "scenario": "error_handling",
+      "source_case": "trigger-pos-01",
+      "source_session": "",
+      "generated_at": "2026-08-11T03:07:25.653530+00:00",
+      "prompt": "Auto-generated from failed case trigger-pos-01. Issues: observation; JSONL; session_id",
+      "expected_behavior": {
+        "response_contains": [
+          "observation",
+          "JSONL",
+          "session_id",
+          "phase",
+          "tool",
+          "tool:{'name': 'Read', 'contains': 'observe.py'}"
+        ],
+        "max_tool_calls": 10
+      },
+      "rubric": {
+        "observation_points": [
+          "是否避免了之前失败的问题: observation; JSONL; session_id",
+          "推理过程是否清晰",
+          "是否存在与之前相同的失败模式"
+        ]
+      },
+      "tags": [
+        "auto-generated",
+        "badcase"
+      ]
+    }
+  ]
+}

@@ -3,7 +3,7 @@
   "name": "My Chrome Extension",
   "version": "1.1.0",
   "description": "请求头捕获 + 书签管理工具",
-  "permissions": ["storage", "webRequest", "bookmarks", "alarms", "sidePanel"],
+  "permissions": ["storage", "webRequest", "bookmarks", "alarms", "sidePanel", "scripting"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"

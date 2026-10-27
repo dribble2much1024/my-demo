@@ -6,6 +6,12 @@
 </head>
 <body>
   <div class="sp-container">
+    <!-- Tab 切换栏 -->
+    <nav class="sp-tab-nav">
+      <button id="tab-bookmarks" class="sp-tab-btn active">书签管理</button>
+      <button id="tab-summary" class="sp-tab-btn">页面总结</button>
+    </nav>
+    <div id="view-bookmarks" class="sp-view">
     <!-- 顶部工具栏 -->
     <header class="sp-header">
       <h1 class="sp-title">书签管理</h1>
@@ -46,6 +52,24 @@
         <input id="chat-input" type="text" placeholder="输入指令，如"把技术类书签整理到开发工具文件夹"...">
         <button id="chat-send" class="sp-btn-primary">发送</button>
       </div>
+    </div>
+    </div>
+
+    <!-- 页面总结视图 -->
+    <div id="view-summary" class="sp-view hidden">
+      <div id="sum-page-title" class="sum-page-title">正在读取当前页面...</div>
+      <div class="sum-controls">
+        <select id="sum-length" class="sum-length">
+          <option value="standard" selected>标准 · 要点列表</option>
+          <option value="short">简短 · 一句话</option>
+          <option value="detailed">详细 · 分段</option>
+        </select>
+        <button id="sum-btn" class="sp-btn-primary">总结</button>
+      </div>
+      <div class="sum-toolbar">
+        <button id="sum-copy-btn" class="sp-btn-small hidden">复制</button>
+      </div>
+      <div id="sum-result" class="sum-result"></div>
     </div>
 
     <!-- 弹窗层 -->

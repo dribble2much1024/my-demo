@@ -1,0 +1,224 @@
+{
+  "name": "sample-eval-suite",
+  "description": "AI Agent 基础能力测评套件 — 覆盖四大场景的样例用例集",
+  "version": "1.0.0",
+  "threshold": 80,
+  "trials": 1,
+  "cases": [
+    {
+      "id": "trigger-pos-01",
+      "name": "正向触发: 读取文件分析",
+      "description": "验证 Agent 能正确读取指定文件并提取关键信息",
+      "scenario": "trigger",
+      "prompt": "请读取 observation-engine/bin/observe.py 文件，告诉我这个脚本的主要功能是什么，以及它输出的 JSONL 记录包含哪些字段。",
+      "expected_behavior": {
+        "tool_call": [
+          {"name": "Read", "contains": "observe.py"}
+        ],
+        "response_contains": [
+          "observation",
+          "JSONL",
+          "session_id",
+          "phase",
+          "tool"
+        ],
+        "response_not_contains": [
+          "我无法访问该文件",
+          "文件不存在"
+        ],
+        "max_tool_calls": 10
+      }
+    },
+    {
+      "id": "trigger-pos-02",
+      "name": "正向触发: 代码搜索",
+      "description": "验证 Agent 能正确搜索代码库中的特定模式",
+      "scenario": "trigger",
+      "prompt": "在 observation-engine 目录下搜索所有包含 'def grade' 的 Python 函数定义，告诉我找到哪些评分方法。",
+      "expected_behavior": {
+        "tool_call": [
+          {"name": "Grep", "contains": "def grade"}
+        ],
+        "response_contains": [
+          "grade"
+        ],
+        "max_tool_calls": 8
+      }
+    },
+    {
+      "id": "trigger-neg-01",
+      "name": "负向触发: 不相关请求不应乱读文件",
+      "description": "验证 Agent 在通用问答场景不误调用项目文件",
+      "scenario": "trigger",
+      "prompt": "1 + 1 等于几？直接回答即可。",
+      "expected_behavior": {
+        "max_tool_calls": 3,
+        "response_contains": ["2"],
+        "response_not_contains": [
+          "observation-engine",
+          "observe.py"
+        ]
+      }
+    },
+    {
+      "id": "logic-read-01",
+      "name": "核心逻辑: 文件读取路径正确",
+      "description": "验证 Agent 在读取文件时使用正确的路径参数",
+      "scenario": "core_logic",
+      "prompt": "读取 observation-engine/bin/eval_graders.py 文件的前 5 行，告诉我这个文件的 shebang 行内容。",
+      "expected_behavior": {
+        "tool_call": [
+          {"name": "Read", "contains": "eval_graders.py"}
+        ],
+        "response_contains": [
+          "eval_graders",
+          "python"
+        ],
+        "max_tool_calls": 5
+      }
+    },
+    {
+      "id": "logic-search-01",
+      "name": "核心逻辑: 搜索结果准确",
+      "description": "验证 Agent 搜索时返回相关结果而非编造",
+      "scenario": "core_logic",
+      "prompt": "在 observation-engine 目录中搜索文件名为 'eval_*.py' 的 Python 文件，列出找到的所有文件名。",
+      "expected_behavior": {
+        "tool_call": [
+          {"name": "Glob", "contains": "eval_*.py"}
+        ],
+        "response_contains": [
+          "eval_"
+        ],
+        "response_not_contains": [
+          "没有找到",
+          "不存在"
+        ],
+        "max_tool_calls": 5
+      }
+    },
+    {
+      "id": "output-pos-01",
+      "name": "产物质量: 结构化输出",
+      "description": "验证 Agent 输出包含预期的关键结构，并评估分析质量",
+      "scenario": "output_quality",
+      "prompt": "分析 observation-engine 目录的项目结构，用一个简短的总结告诉我它包含哪些 Python 脚本，每个脚本的职责是什么。",
+      "expected_behavior": {
+        "response_contains": [
+          "observe",
+          "harness",
+          "grader",
+          "rotate"
+        ],
+        "response_not_contains": [
+          "我不知道",
+          "无法确定"
+        ],
+        "max_tool_calls": 12
+      },
+      "rubric": {
+        "observation_points": [
+          "是否准确识别了 observation-engine 目录下的所有 Python 脚本",
+          "每个脚本的职责描述是否准确、清晰",
+          "分析逻辑是否合理——是否先搜索再总结",
+          "是否存在编造不存在的脚本名称或功能"
+        ]
+      }
+    },
+    {
+      "id": "error-input-01",
+      "name": "异常容错: 文件不存在",
+      "description": "验证 Agent 读取不存在的文件时明确告知而非编造内容",
+      "scenario": "error_handling",
+      "prompt": "请读取 D:\\workspace\\my-demo\\nonexistent-file-xyz.txt 文件的内容并总结。",
+      "expected_behavior": {
+        "response_contains": [
+          "不存在",
+          "找不到",
+          "无法",
+          "not found"
+        ],
+        "response_not_contains": [
+          "内容如下",
+          "文件内容是",
+          "总结如下"
+        ],
+        "max_tool_calls": 5
+      }
+    },
+    {
+      "id": "error-input-02",
+      "name": "异常容错: 模糊指令应追问",
+      "description": "验证 Agent 在信息不足时主动追问而非瞎猜",
+      "scenario": "error_handling",
+      "prompt": "帮我修改一下那个文件。",
+      "expected_behavior": {
+        "response_contains": [
+          "哪个",
+          "什么文件",
+          "请提供",
+          "specify",
+          "which"
+        ],
+        "response_not_contains": [
+          "修改完成",
+          "已修改",
+          "已更新"
+        ],
+        "max_tool_calls": 3
+      }
+    },
+    {
+      "id": "boundary-01",
+      "name": "边界条件: 空目录处理",
+      "description": "验证 Agent 处理空搜索结果的合理行为",
+      "scenario": "boundary",
+      "prompt": "在 observation-engine 目录下搜索文件名为 'nonexistent_pattern_xyz_*.py' 的文件。",
+      "expected_behavior": {
+        "response_contains": [
+          "没有",
+          "未找到",
+          "not found",
+          "无"
+        ],
+        "response_not_contains": [
+          "找到了",
+          "以下是"
+        ],
+        "max_tool_calls": 5
+      }
+    },
+    {
+      "id": "boundary-02",
+      "name": "边界条件: 大目录枚举",
+      "description": "验证 Agent 能处理递归文件搜索",
+      "scenario": "boundary",
+      "prompt": "列出 observation-engine 目录下的所有 Python 文件（.py），按字母顺序排列。",
+      "expected_behavior": {
+        "tool_call": [
+          {"name": "Glob", "contains": "*.py"}
+        ],
+        "response_contains": [
+          ".py"
+        ],
+        "max_tool_calls": 5
+      }
+    }
+  ],
+  "scoring": {
+    "initial_score": 100,
+    "graders": ["StepGrader", "EfficiencyGrader", "ResultGrader", "RubricGrader"],
+    "threshold": 80
+  },
+  "metadata": {
+    "created": "2026-08-11",
+    "framework": "基于腾讯 AI Agent 测评方案 + Anthropic/OpenAI 最佳实践",
+    "scenario_distribution": {
+      "trigger": 3,
+      "core_logic": 2,
+      "output_quality": 1,
+      "error_handling": 2,
+      "boundary": 2
+    }
+  }
+}

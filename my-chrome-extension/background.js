@@ -39,6 +39,50 @@ function uuid() {
 }
 
 // ============================================================
+// 页面内容提取（注入到活动标签页执行，必须自包含、不捕获外部变量）
+// ============================================================
+function extractPageContent() {
+  const title = document.title || '';
+  const metaDesc = (document.querySelector('meta[name="description"]')?.content || '').trim();
+
+  const candidates = [
+    document.querySelector('article'),
+    document.querySelector('main'),
+    document.body
+  ].filter(Boolean);
+
+  let text = '';
+  for (const root of candidates) {
+    const clone = root.cloneNode(true);
+    clone.querySelectorAll('script,style,noscript,iframe,nav,header,footer,aside,form,svg,button,input,textarea,select').forEach(el => el.remove());
+    text = (clone.innerText || clone.textContent || '').replace(/\s+/g, ' ').trim();
+    if (text.length > 200) break;
+  }
+
+  if (!text) {
+    text = (document.body?.innerText || '').replace(/\s+/g, ' ').trim();
+  }
+
+  return { title, metaDesc, url: location.href, text: text.slice(0, 8000) };
+}
+
+/** 根据档位构造中文总结提示词 */
+function buildSummaryPrompt(extracted, length) {
+  const guides = {
+    short: '用一句话概括文章核心内容（不超过 50 字）',
+    standard: '用 3-5 条中文要点概括文章，每条一句话，以 "- " 开头',
+    detailed: '先写一段 2-3 句的总述，再用分节小标题列出关键要点，尽量完整'
+  };
+  const guide = guides[length] || guides.standard;
+
+  const parts = ['请总结以下网页内容。要求：使用中文输出；' + guide];
+  if (extracted.title) parts.push('网页标题: ' + extracted.title);
+  if (extracted.metaDesc) parts.push('网页描述: ' + extracted.metaDesc);
+  parts.push('正文内容:\n' + extracted.text);
+  return parts.join('\n');
+}
+
+// ============================================================
 // 快照管理
 // ============================================================
 async function createSnapshot(operation, affectedIds) {
@@ -308,6 +352,77 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
           const plan = JSON.parse(jsonMatch[0]);
           sendResponse({ plan });
+        } catch (err) {
+          sendResponse({ error: err.message });
+        }
+      })();
+      return true;
+
+    case 'summarizePage':
+      (async () => {
+        try {
+          const data = await chrome.storage.local.get('llmConfig');
+          const config = data.llmConfig;
+          if (!config || !config.apiKey || !config.endpoint) {
+            sendResponse({ error: '请先在 Popup 中配置 LLM API' });
+            return;
+          }
+
+          const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          if (!tab || !tab.id) {
+            sendResponse({ error: '无法获取当前标签页' });
+            return;
+          }
+
+          let extracted;
+          try {
+            const results = await chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              func: extractPageContent
+            });
+            extracted = results[0]?.result;
+          } catch (_) {
+            sendResponse({ error: '无法读取该页面内容（可能是浏览器内部页面）' });
+            return;
+          }
+
+          if (!extracted || !extracted.text) {
+            sendResponse({ error: '无法读取页面内容', title: extracted?.title || '' });
+            return;
+          }
+
+          const prompt = buildSummaryPrompt(extracted, message.length);
+
+          const response = await fetch(config.endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${config.apiKey}`
+            },
+            body: JSON.stringify({
+              model: config.model,
+              messages: [
+                { role: 'system', content: '你是一个网页内容总结助手。' },
+                { role: 'user', content: prompt }
+              ],
+              temperature: 0.3
+            })
+          });
+
+          if (!response.ok) {
+            const errText = await response.text();
+            sendResponse({ error: `LLM API 错误 (${response.status}): ${errText.slice(0, 200)}` });
+            return;
+          }
+
+          const json = await response.json();
+          const summary = json.choices?.[0]?.message?.content || '';
+          if (!summary) {
+            sendResponse({ error: 'LLM 未返回总结内容' });
+            return;
+          }
+
+          sendResponse({ summary, title: extracted.title, url: extracted.url });
         } catch (err) {
           sendResponse({ error: err.message });
         }

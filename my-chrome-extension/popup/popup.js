@@ -236,23 +236,32 @@ settingsToggle.addEventListener('click', () => {
 // ============================================================
 const tabHeader = document.getElementById('tab-header');
 const tabBookmark = document.getElementById('tab-bookmark');
+const tabSummary = document.getElementById('tab-summary');
+const tabLlm = document.getElementById('tab-llm');
 const panelHeader = document.getElementById('panel-header');
 const panelBookmark = document.getElementById('panel-bookmark');
+const panelSummary = document.getElementById('panel-summary');
+const panelLlm = document.getElementById('panel-llm');
 
-tabHeader.addEventListener('click', () => {
-  tabHeader.classList.add('active');
-  tabBookmark.classList.remove('active');
-  panelHeader.classList.add('active');
-  panelBookmark.classList.remove('active');
-});
+const tabs = [
+  { btn: tabHeader, panel: panelHeader },
+  { btn: tabBookmark, panel: panelBookmark, onShow: loadBookmarkStats },
+  { btn: tabSummary, panel: panelSummary },
+  { btn: tabLlm, panel: panelLlm, onShow: loadLlmConfig }
+];
 
-tabBookmark.addEventListener('click', () => {
-  tabBookmark.classList.add('active');
-  tabHeader.classList.remove('active');
-  panelBookmark.classList.add('active');
-  panelHeader.classList.remove('active');
-  loadBookmarkStats();
-});
+function activateTab(activeBtn) {
+  for (const t of tabs) {
+    const isActive = t.btn === activeBtn;
+    t.btn.classList.toggle('active', isActive);
+    t.panel.classList.toggle('active', isActive);
+    if (isActive && t.onShow) t.onShow();
+  }
+}
+
+for (const t of tabs) {
+  t.btn.addEventListener('click', () => activateTab(t.btn));
+}
 
 // ============================================================
 // 书签管理入口
@@ -260,6 +269,17 @@ tabBookmark.addEventListener('click', () => {
 document.getElementById('open-sidepanel-btn').addEventListener('click', async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   await chrome.sidePanel.open({ windowId: tab.windowId });
+  window.close();
+});
+
+// ============================================================
+// 页面总结入口
+// ============================================================
+document.getElementById('open-summary-btn').addEventListener('click', async () => {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  await chrome.storage.local.set({ sidepanelView: 'summary' });
+  await chrome.sidePanel.open({ windowId: tab.windowId });
+  chrome.runtime.sendMessage({ action: 'switchToSummary' }).catch(() => {});
   window.close();
 });
 
@@ -283,31 +303,12 @@ async function loadBookmarkStats() {
 }
 
 // ============================================================
-// LLM 配置弹窗
+// LLM 配置
 // ============================================================
-const llmConfigBtn = document.getElementById('llm-config-btn');
-const llmModal = document.getElementById('llm-modal');
-const llmModalClose = document.getElementById('llm-modal-close');
 const llmEndpoint = document.getElementById('llm-endpoint');
 const llmApikey = document.getElementById('llm-apikey');
 const llmModel = document.getElementById('llm-model');
 const llmSaveBtn = document.getElementById('llm-save-btn');
-const llmCancelBtn = document.getElementById('llm-cancel-btn');
-
-llmConfigBtn.addEventListener('click', () => {
-  llmModal.classList.remove('hidden');
-  llmApikey.focus();
-});
-
-function closeLlmModal() {
-  llmModal.classList.add('hidden');
-}
-
-llmModalClose.addEventListener('click', closeLlmModal);
-llmCancelBtn.addEventListener('click', closeLlmModal);
-llmModal.addEventListener('click', (e) => {
-  if (e.target === llmModal) closeLlmModal();
-});
 
 async function loadLlmConfig() {
   try {
@@ -328,6 +329,5 @@ llmSaveBtn.addEventListener('click', async () => {
       model: llmModel.value.trim()
     }
   });
-  closeLlmModal();
   showToast('LLM 配置已保存');
 });

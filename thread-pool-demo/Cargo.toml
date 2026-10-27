@@ -1,0 +1,18 @@
+[package]
+name = "thread-pool-demo"
+version = "0.1.0"
+edition = "2021"
+description = "教学版线程池（标准库 thread + mpsc + Arc<Mutex<Condvar>>，不引入 tokio）"
+
+[lib]
+name = "thread_pool_demo"
+path = "src/lib.rs"
+
+[[bin]]
+name = "thread-pool-demo"
+path = "src/main.rs"
+
+[dependencies]
+# 本 demo 不引入任何外部依赖，纯标准库。
+# 用 thread + mpsc + Arc<Mutex<Condvar>> 才能看清线程池的骨架：
+# 有界队列（背压）、panic 隔离、毒锁恢复、优雅/超时关闭。

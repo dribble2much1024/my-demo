@@ -1,0 +1,17 @@
+[package]
+name = "task-queue-demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+futures = "0.3"
+
+[lib]
+name = "task_queue_demo"
+path = "src/lib.rs"
+
+[[bin]]
+name = "task-queue-demo"
+path = "src/main.rs"
